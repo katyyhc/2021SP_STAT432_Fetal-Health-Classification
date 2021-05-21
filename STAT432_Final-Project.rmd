@@ -1,0 +1,603 @@
+---
+title: "STAT432_Final Project - Fetal Health Classification"
+author: "Chien-Ju Chen(chienju2), Yun-Hsuan Chuang(yhc4)"
+date: "4/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse=TRUE, echo = FALSE, fig.align='center')
+```
+
+## Summary Statistics
+
+```{r, fig.height=3, fig.width=3}
+data = read.csv("fetal_health.csv")
+
+# check for missing values
+unique = apply(data, 2, unique)
+
+# plot the bar chart to show the proportion of each class for the outcome
+par(mar=c(2,4,2,1))
+bp <- barplot(table(data$fetal_health),
+              names.arg=names(table(data$fetal_health)), cex.names=0.7,
+              las=0, main="fetal_health", ylab="count", cex.main=0.8, cex.axis=0.7, cex.lab=0.7)
+text(bp, 0, labels=table(data$fetal_health), pos=3, cex=0.7, font=2)
+
+# use table to show the proportion of each class for the outcome
+print(table(fetal_health = data$fetal_health))
+```
+
+```{r}
+# calculate the summary statistics for numerical variables
+min = apply(data[, 1:20], 2, min)
+median = apply(data[, 1:20], 2, median)
+mean = round(apply(data[, 1:20], 2, mean), 2)
+max = apply(data[, 1:20], 2, max)
+sd = round(apply(data[, 1:20], 2, sd), 4)
+summary <- data.frame(min=min, median=median, mean=mean, max=max, sd=sd)
+library(knitr)
+kable(summary)
+```
+
+```{r, fig.height=6, fig.width=10}
+# plot the box chart for numerical variables to check for outliers
+par(mfrow=c(4,5), mar=c(1,2,2,1))
+for (col in names(data[, 1:20]))
+{
+  boxplot(data[, col], main=col, cex.main=0.9)
+}
+```
+
+```{r, fig.height=6, fig.width=10}
+par(mfrow=c(4,5), mar=c(2,3,2,1))
+for (col in names(data[, 1:20]))
+{
+  hist(data[, col], main=col, cex.main=0.95)
+}
+```
+
+```{r, fig.height=3, fig.width=3}
+# convert the data type of "histogram_tendency" to factor
+data_new <- data
+data_new$histogram_tendency <- as.factor(data_new$histogram_tendency)
+
+# show the proportion of each category for "histogram_tendency" using bar chart
+par(mar=c(2,4,2,1))
+bp <- barplot(table(data$histogram_tendency),
+              names.arg=names(table(data$histogram_tendency)), las=0, cex.names=0.7,
+              main="histogram_tendency", ylab="count", cex.main=0.8, cex.axis=0.7, cex.lab=0.7)
+text(bp, 0, labels=table(data$histogram_tendency), pos=3, cex=0.7, font=2)
+
+# use table to show the proportion of "histogram_tendency"
+print(table(histogram_tendency = data$histogram_tendency))
+```
+
+```{r}
+# install.packages("PCAmixdata")
+library(PCAmixdata)
+# split the dataset into quantitative and qualitative variables
+split <- splitmix(data_new[, 1:21])  
+
+# perform PCA for mixed-type data
+res.pcamix <- PCAmix(X.quanti=split$X.quanti, X.quali=split$X.quali, 
+                     rename.level=TRUE, graph=FALSE, ndim=10)
+
+# display the proportion of variance explained by each PC
+kable(head(res.pcamix$eig))
+
+# use the first 5 PCs to build the reduced dataset
+x_reduce <- res.pcamix$scores[,1:5]
+```
+
+```{r}
+# check the relationship between "histogram_tendency" & "fetal_health"
+table = table(fetal_health=data$fetal_health, histogram_tendency=data$histogram_tendency)
+print(round(table/apply(table, 1, sum),4)*100)
+
+# remove "histogram_tendency" from the dataset
+x_20 = data_new[, 1:20]
+```
+
+## Unsupervised learning
+
+### K-Means clustering
+```{r}
+# scale the data before clustering
+x_20 = scale(x_20) 
+truth = data$fetal_health 
+
+# K-means clustering for the reduced data
+set.seed(1)
+kmean.reduce <- kmeans(x_reduce, centers=3, nstart=10)
+
+# K-means clustering for the data without "histogram_tendency"
+set.seed(1)
+kmean.20 <- kmeans(x_20, centers=3, nstart=10)
+
+# calculate the proportion of each cluster
+apply(cbind(truth=truth, x_reduce=kmean.reduce$cluster, x_20=kmean.20$cluster), 2, table)
+```
+
+```{r, fig.height=5, fig.width=8}
+# create a plot of all observations on the first two PCs
+library(ggplot2)
+library(gridExtra)
+pc.true <- ggplot(data=data.frame(x_reduce), aes(x=dim.1, y=dim.2)) + 
+  geom_point(aes(color=as.factor(truth)), size=1.5, 
+             color=c("chartreuse4", "deepskyblue", "darkorange")[truth]) + 
+  ggtitle("Truth") + xlab("PC1") + ylab("PC2")
+
+pc.reduce <- ggplot(data=data.frame(x_reduce), aes(x=dim.1, y=dim.2)) + 
+  geom_point(aes(color=as.factor(kmean.reduce$cluster)), size=1.5, 
+             color=c("chartreuse4", "darkorange", "deepskyblue")[kmean.reduce$cluster]) + 
+  ggtitle("K-Means clustering of x_reduce dataset", ) + xlab("PC1") + ylab("PC2")
+
+pc.20 <- ggplot(data=data.frame(x_reduce), aes(x=dim.1, y=dim.2)) + 
+  geom_point(aes(color=as.factor(kmean.20$cluster)), size=1.5, 
+             color=c("chartreuse4", "darkorange", "deepskyblue")[kmean.20$cluster]) + 
+  ggtitle("K-means clustering of x_20 dataset") + xlab("PC1") + ylab("PC2")
+
+grid.arrange(pc.true, pc.reduce, pc.20, nrow=2, ncol=2)
+```
+
+```{r}
+# calculate the confusion matrix for clustering results
+tb.reduce = table(pred.x_reduce=kmean.reduce$cluster, truth=truth)
+tb.20 = table(pred.x_20=kmean.20$cluster, truth=truth)
+tb.kmean <- list(tb.reduce, tb.20)
+print(tb.reduce)
+print(tb.20)
+```
+
+### Hierarchecal clustering
+
+```{r}
+# Hierarchecal clustering for the reduced data
+hcfit_reduce = hclust(dist(x_reduce), method = "complete")
+clust_hc_reduce = cutree(hcfit_reduce, k = 3)   # cut off into 3 clusters
+
+# Hierarchecal clustering for the data without "histogram_tendency"
+hcfit_20 = hclust(dist(x_20), method = "complete")
+clust_hc_20 = cutree(hcfit_20, k = 3)   # cut off into 3 clusters
+
+# confusion matrix for both
+cm_hc_reduce = table(clust_hc_reduce, truth)
+cm_hc_20 = table(clust_hc_20, truth)
+print(cm_hc_reduce)
+print(cm_hc_20)
+tb.hc <- list(cm_hc_reduce, cm_hc_20)
+```
+
+### SOM
+
+```{r}
+set.seed(1)
+# install.packages("kohonen")
+library(kohonen)
+library(dplyr)
+# SOM for the reduced data
+SOM_reduce = som(as.matrix(x_reduce), grid = somgrid(11, 11, "hexagonal"))
+obs_cell_reduce = data.frame(SOM_reduce$unit.classif)
+# calculate pairwise distance between the cells
+distance_reduce = dist(SOM_reduce$codes[[1]])
+# and separate into 3 clusters
+som_reduce = cutree(hclust(distance_reduce), k = 3)
+cell_cluster_reduce = data.frame(cbind(c(1:121), as.matrix(som_reduce)))
+obs_cell_reduce = obs_cell_reduce %>% left_join(cell_cluster_reduce, 
+                                  by = c("SOM_reduce.unit.classif" = "X1"))
+names(obs_cell_reduce)[c(1, 2)] = c("obs_cell_reduce", "clusters")
+som_reduce_cm = table(som_reduce = obs_cell_reduce$clusters, truth)
+print(som_reduce_cm)
+
+# SOM for the data without "histogram_tendency"
+SOM_20 = som(as.matrix(x_20), grid = somgrid(11, 11, "hexagonal"))
+obs_cell_20 = data.frame(SOM_20$unit.classif)
+distance_20 = dist(SOM_20$codes[[1]])
+som_20 = cutree(hclust(distance_20), k = 3)
+cell_cluster_20 = data.frame(cbind(c(1:121), as.matrix(som_20)))
+obs_cell_20 = obs_cell_20 %>% left_join(cell_cluster_20, 
+                                  by = c("SOM_20.unit.classif" = "X1"))
+names(obs_cell_20)[c(1, 2)] = c("obs_cell_20", "clusters")
+som_20_cm = table(som_20 = obs_cell_20$clusters, truth)
+print(som_20_cm)
+
+tb.som <- list(som_reduce_cm, som_20_cm)
+```
+
+### Clustering Accuracy Comparison
+```{r, echo=TRUE}
+# create the function for calculating the clustering accuracy
+library(gtools)
+accuracy <- function(table)
+{
+  col = ncol(table)
+  permut = permutations(col, col, 1:col)
+  accuracy = 0
+  for (i in 1:nrow(permut))
+  {
+    accu.col = sum(diag(table[, permut[i, ]])) / sum(table[, permut[i, ]]) 
+    accuracy = ifelse(accu.col > accuracy, accu.col, accuracy)
+  }
+  return(accuracy)
+}
+
+# calculate clustering accuracy for two datasets
+list.tb <- list(tb.kmean, tb.hc, tb.som)
+tb.accu = c()
+for (i in 1:length(list.tb))
+{
+  accu = c(round(accuracy(list.tb[[i]][[1]]), 4), round(accuracy(list.tb[[i]][[2]]), 4))
+  tb.accu <- cbind(tb.accu, accu)
+}
+rownames(tb.accu) <- c("x_reduce", "x_20")
+colnames(tb.accu) <- c("K-Means", "Hierarchical", "SOM")
+kable(tb.accu)
+```
+
+
+## Supervised learning
+```{r}
+# split the dataset into training and testing data
+X <- data_new[, 1:20]
+set.seed(1)
+train_idx = sample(1:nrow(X), round(nrow(X)*0.75))
+Xtrain <- scale(X[train_idx, ])
+Ytrain <- truth[train_idx]
+Xtest <- scale(X[-train_idx, ])
+Ytest <- truth[-train_idx]
+
+# display the proportion of each class for the testing data
+table(Ytest)
+```
+
+### SVM
+
+#### Compare Performance between Classification Types
+```{r}
+library(kernlab)
+
+# construct tuning settings for each kernel function
+cost = c(0.01,0.1,1,10,100)
+degree = c(2:6)
+sigma = c(2^seq(-6,2,2))
+tuning.poly = expand.grid(cost=cost, degree=degree)
+tuning.rbk = expand.grid(cost=cost, sigma=sigma)
+
+# fit the SVM model with linear kernel using 5-fold cross-validation
+set.seed(1)
+cvErr.linear <- data.frame(matrix(NA, 3, 3))
+for (i in 1:3)
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='vanilladot', C=cost[i], cross=5)
+  svmSpoc.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="spoc-svc",
+                      kernel='vanilladot', C=cost[i], cross=5)
+  svmKbb.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="kbb-svc",
+                      kernel='vanilladot', C=cost[i], cross=5)
+  cvErr.linear[i,] <- round(c(cross(svm.fit), cross(svmSpoc.fit), cross(svmKbb.fit))*100, 4)
+}
+rownames(cvErr.linear) <- paste("cost=", format(cost[1:3], width=4, justify=c("right")), sep='')
+colnames(cvErr.linear) <- c("SVM(ln)", "SVM(ln_spoc)", "SVM(ln_kbb)")
+
+# fit the SVM model with polynomial kernel using 5-fold cross-validation
+set.seed(1)
+cvErr.poly <- data.frame(matrix(NA, 3, 3))
+for (i in 1:3)
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='polydot', kpar=list(degree=tuning.poly$degree[i]),
+                  C=tuning.poly$cost[i], cross=5)
+  svmSpoc.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="spoc-svc",
+                      kernel='polydot', kpar=list(degree=tuning.poly$degree[i]),
+                      C=tuning.poly$cost[i], cross=5)
+  svmSpoc.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="kbb-svc",
+                     kernel='polydot', kpar=list(degree=tuning.poly$degree[i]),
+                     C=tuning.poly$cost[i], cross=5)
+  cvErr.poly[i,] <- round(c(cross(svm.fit), cross(svmSpoc.fit), cross(svmKbb.fit))*100, 4)
+}
+rownames(cvErr.poly) <- apply(tuning.poly[1:3,], 1, function(x){paste("cost=", format(x[1], width=4,
+                                                    justify=c("right")), ", degree=", x[2], sep='')})
+colnames(cvErr.poly) <- c("SVM(poly)", "SVM(poly_spoc)", "SVM(poly_kbb)")
+
+# fit the SVM model with Radial basis kernel using 5-fold cross-validation
+set.seed(1)
+cvErr.rbk <- data.frame(matrix(NA, 3, 3))
+for (i in 1:3)
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                  C=tuning.rbk$cost[i], cross=5)
+  svmSpoc.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="spoc-svc",
+                      kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                      C=tuning.rbk$cost[i], cross=5)
+  svmKbb.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="kbb-svc",
+                     kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                     C=tuning.rbk$cost[i], cross=5)
+  cvErr.rbk[i,] <- round(c(cross(svm.fit), cross(svmSpoc.fit), cross(svmKbb.fit))*100, 4)
+}
+rownames(cvErr.rbk) <- apply(tuning.rbk[1:3,], 1, function(x){paste("cost=", format(x[1], width=4,
+                                                                    justify=c("right")), ", sigma=",
+                                                                    format(x[2], width=2), sep='')})
+colnames(cvErr.rbk) <- c("SVM(rbf)", "SVM(rbf_spoc)", "SVM(rbf_kbb)")
+
+# output the cross-validation error for each kernel function
+print(cvErr.linear)
+print(cvErr.poly)
+print(cvErr.rbk)
+```
+
+#### Parameter Tuning
+```{r}
+# fit the SVM model with linear kernel using 10-fold cross-validation
+set.seed(1)
+cvErr.linear = matrix(NA, length(cost), 1)
+for (i in 1:(length(cost)))
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='vanilladot', C=cost[i], cross=10)
+  cvErr.linear[i,1] <- round(cross(svm.fit)*100, 4)
+}
+rownames(cvErr.linear) <- paste("cost=", cost, sep='')
+colnames(cvErr.linear) <- c("SVM(ln)")
+
+# fit the SVM model with polynomial kernel using 10-fold cross-validation
+set.seed(1)
+cvErr.poly = rep(NA, nrow(tuning.poly))
+for (i in 1:nrow(tuning.poly))
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='polydot', kpar=list(degree=tuning.poly$degree[i]),
+                  C=tuning.poly$cost[i], cross=10)
+  cvErr.poly[i] <- round(cross(svm.fit)*100, 4)
+}
+cvErr.poly = matrix(cvErr.poly, 5, 5)
+rownames(cvErr.poly) <- paste("cost=", cost, sep='')
+colnames(cvErr.poly) <- paste("degree=", degree, sep='')
+
+# fit the SVM model with Radial basis kernel using 10-fold cross-validation
+set.seed(1)
+cvErr.rbk <- data.frame(matrix(NA, nrow(tuning.rbk), 3))
+for (i in 1:nrow(tuning.rbk))
+{
+  svm.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                  kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                  C=tuning.rbk$cost[i], cross=10)
+  svmSpoc.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="spoc-svc",
+                      kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                      C=tuning.rbk$cost[i], cross=10)
+  svmKbb.fit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="kbb-svc",
+                     kernel='rbfdot', kpar=list(sigma=tuning.rbk$sigma[i]),
+                     C=tuning.rbk$cost[i], cross=10)
+  cvErr.rbk[i,] <- round(c(cross(svm.fit), cross(svmSpoc.fit), cross(svmKbb.fit))*100, 4)
+}
+rownames(cvErr.rbk) <- apply(tuning.rbk, 1, function(x){paste("cost=", format(x[1], width=4,
+                                                        justify=c("right")), ", sigma=",
+                                                        format(x[2], width=2), sep='')})
+colnames(cvErr.rbk) <- c("SVM(rbf)", "SVM(rbf_spoc)", "SVM(rbf_kbb)")
+
+# output the cross-validation error for each kernel function
+print(cvErr.linear)
+print(cvErr.poly)
+print(cvErr.rbk)
+```
+
+```{r}
+# find the parameters correspond with the minimum cross-validation error for each kernel function
+minErr.linear = which(cvErr.linear == min(cvErr.linear), arr.ind=TRUE)
+minErr.poly = which(cvErr.poly == min(cvErr.poly), arr.ind=TRUE)
+minErr.rbk = which(cvErr.rbk == min(cvErr.rbk), arr.ind=TRUE)
+
+mat.bestfit <- cbind(c(paste0("cost=", cost[minErr.linear][1]),
+                       paste0("cost=", cost[minErr.poly][1],
+                           ", degree=", degree[minErr.poly][2]),
+                       paste0("cost=", tuning.rbk[minErr.rbk[1], "cost"],
+                           ", sigma=", tuning.rbk[minErr.rbk[1], "sigma"])),
+                       round(c(min(cvErr.linear), min(cvErr.poly), min(cvErr.rbk)), 4))
+colnames(mat.bestfit) <- c("Best Tuning Setting", "CV Error(%)")
+rownames(mat.bestfit) <- c("SVM(ln)", "SVM(poly)", colnames(cvErr.rbk)[minErr.rbk][2])
+kable(mat.bestfit)
+```
+
+```{r}
+# fit the SVM model with linear kernel and the selected tuning setting
+svmLn.bestfit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                      kernel='vanilladot', C=100, prob.model=TRUE)
+# predict using the best model with linear kernel
+prob.linear <- predict(svmLn.bestfit, Xtest, type="probabilities")
+
+# fit the SVM model with polynomial kernel and the selected tuning setting
+svmPoly.bestfit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                        kernel='polydot', kpar=list(degree=3), C=0.01, prob.model=TRUE)
+# predict using the best model with polynomial kernel
+prob.poly <- predict(svmPoly.bestfit, Xtest, type="probabilities")
+
+# fit the SVM model with RBK kernel and the selected tuning setting
+svmRBK.bestfit <- ksvm(Xtrain, matrix(as.factor(Ytrain)), scaled=c(), type="C-svc",
+                       kernel='rbfdot', kpar=list(sigma=0.0625), C=100, prob.model=TRUE)
+# predict using the best model with RBK kernel
+prob.rbk <- predict(svmRBK.bestfit, Xtest, type="probabilities")
+
+tb.linear = table(pred.linear=apply(prob.linear, 1, which.max), truth=Ytest)
+tb.poly = table(pred.poly=apply(prob.poly, 1, which.max), truth=Ytest)
+tb.rbk = table(pred.rbf=apply(prob.rbk, 1, which.max), truth=Ytest)
+print(tb.linear)
+print(tb.poly)
+print(tb.rbk)
+```
+
+### Random Forest
+
+#### Parameter Tuning
+```{r}
+library(randomForest)
+set.seed(123)
+
+# Grid Search for multiple parameters
+mtry = c(1, 3, 5, 8, 10)
+nodesize = c(1, 5, 10, 20, 30)
+ntree = c(500, 1000, 1500, 2000, 2500)
+sampsize = c(500, 1000, 1500)
+tune_params = expand.grid(mtry = mtry, nodesize = nodesize, 
+                          ntree = ntree, sampsize = sampsize)
+
+set.seed(123)
+matrix_pred_accu = matrix(NA, nrow = nrow(tune_params), ncol = ncol(tune_params) + 1)
+colnames(matrix_pred_accu) = c("mtry", "nodesize", "ntree", "sampsize", "accuracy")
+
+
+for (i in 1:nrow(tune_params)) {
+  prediction_accuracy = c()
+  for (j in 1:5){
+    rf_fit = randomForest(Xtrain, as.factor(Ytrain),
+                      mtry = tune_params[i, 1],
+                      nodesize = tune_params[i, 2],
+                      ntree = tune_params[i, 3],
+                      sampsize = tune_params[i, 4])
+    y_pred = predict(rf_fit, newdata = Xtest)
+    cm = table(y_pred, Ytest)
+    matrix_pred_accu[i, "mtry"] = tune_params[i, 1]
+    matrix_pred_accu[i, "nodesize"] = tune_params[i, 2]
+    matrix_pred_accu[i, "ntree"] = tune_params[i, 3]
+    matrix_pred_accu[i, "sampsize"] = tune_params[i, 4]
+    prediction_accuracy = append(prediction_accuracy, (sum(diag(cm) / sum(cm))))
+  }
+  matrix_pred_accu[i, "accuracy"] = mean(prediction_accuracy)
+}
+
+# print top 10 Pred_Accu, sorted by accuracy
+matrix_pred_accu[order(matrix_pred_accu[, 5], decreasing = TRUE), ][1:10, ]
+```
+
+#### Fit Model with Best Paramaters
+```{r}
+# tuned RF prediction, in probabilities
+set.seed(1)
+rf_tuned_fit = randomForest(Xtrain, as.factor(Ytrain), 
+                      mtry = 3, nodesize = 1, ntree = 2000, sampsize = 1500)
+y_pred_rf = predict(rf_tuned_fit, newdata = Xtest, type = "prob")
+tb_rf = table(pred=apply(y_pred_rf, 1, which.max), truth=Ytest)
+print(tb_rf)
+```
+
+### Boosting
+
+#### Parameter Tuning for Linear Base Learners
+```{r}
+library(xgboost)
+
+# transform training and test sets into xgb.DMatrix object
+dtrain <- xgb.DMatrix(Xtrain, label=Ytrain-1)
+
+# construct tuning settings for linear base learners
+eta = c(0.001, 0.01, 0.1)
+nround = c(100, 200, 300)
+param.linear = expand.grid(eta=eta, nround=nround)
+auc.linear = matrix(rep(NA, 2*nrow(param.linear)), nrow(param.linear), 2)
+colnames(auc.linear) <- c("auc", "iteration")
+set.seed(1)
+
+for (i in 1:nrow(param.linear))
+{
+  xgbFit.ln = xgb.cv(params=list(booster="gblinear", nthread=1,
+                                 eta=param.linear$eta[i], objective="multi:softmax",
+                                 num_class = 3),
+                     data=dtrain, nrounds=param.linear$nround[i], nfold=10, metrics=list("auc"),
+                     verbose=0, early_stopping_rounds=10)
+  auc.linear[i, "auc"] = xgbFit.ln$evaluation_log$test_auc_mean[xgbFit.ln$best_iteration]
+  auc.linear[i, "iteration"] = xgbFit.ln$best_iteration
+}
+# show the tuning result for the model with linear base learners
+cbind(param.linear, auc.linear)
+```
+
+#### Parameter Tuning for Tree Base Learners
+```{r}
+# construct tuning settings for tree base learners
+eta = c(0.001, 0.01, 0.1)
+max_depth=c(2,6)
+subsample = c(0.3, 0.5, 0.8, 1)
+nround = c(100, 200, 300)
+param.tree = expand.grid(eta=eta, max_depth=max_depth, subsample=subsample,
+                         nround = nround)
+
+# fit the model using the tree model as base learners
+auc.tree = matrix(rep(NA, 2*nrow(param.tree)), nrow(param.tree), 2)
+colnames(auc.tree) <- c("auc", "iteration")
+set.seed(1)
+for (i in 1:nrow(param.tree))
+{
+  xgbFit.tree = xgb.cv(params=list(booster="gbtree",
+                                   max_depth=param.tree$max_depth[i],
+                                   eta=param.tree$eta[i],
+                                   subsample = param.tree$subsample[i],
+                                   objective="multi:softmax",
+                                   num_class = 3),
+                     data=dtrain, nrounds=param.tree$nround[i],
+                     nfold=10, metrics= list("auc"),
+                     verbose=0, early_stopping_rounds=50)
+  auc.tree[i, "auc"] = xgbFit.tree$evaluation_log$test_auc_mean[xgbFit.tree$best_iteration]
+  auc.tree[i, "iteration"] = xgbFit.tree$best_iteration
+}
+# show the tuning result for the model with tree base learners
+cbind(param.tree, auc.tree)
+```
+
+#### Fit Model with Best Paramaters
+```{r}
+# linear learner
+dtrain <- xgb.DMatrix(Xtrain, label=Ytrain-1)
+set.seed(1)
+xgb_linear = xgb.train(params = list(booster = "gblinear", nthread = 1, 
+                                  eta = 0.1, objective = "multi:softprob", 
+                                  num_class = 3, eval_metric = "auc"), 
+                       data = dtrain, nrounds = 200, verbose = 0)
+y_pred_xgb_linear = predict(xgb_linear, newdata = Xtest)
+y_pred_xgb_linear = matrix(y_pred_xgb_linear, ncol = 3, byrow = TRUE)
+colnames(y_pred_xgb_linear) = c(1, 2, 3)
+tb_xgb_linear = table(pred_linearXGB=apply(y_pred_xgb_linear, 1, which.max), truth=Ytest)
+print(tb_xgb_linear)
+
+# tree based learner
+set.seed(1)
+xgb_tree = xgb.train(params = list(booster = "gbtree", max_depth = 6, 
+                                    eta = 0.1, objective = "multi:softprob", 
+                                  num_class = 3, eval_metric = "auc",
+                                  subsample = 0.5), 
+                       data = dtrain, nrounds = 200, verbose = 0)
+y_pred_xgb_tree = predict(xgb_tree, newdata = Xtest)
+y_pred_xgb_tree = matrix(y_pred_xgb_tree, ncol = 3, byrow = TRUE)
+colnames(y_pred_xgb_tree) = c(1, 2, 3)
+tb_xgb_tree = table(pred_treeXGB=apply(y_pred_xgb_tree, 1, which.max), truth=Ytest)
+print(tb_xgb_tree)
+```
+
+### Classification Accuracy Comparison
+```{r, echo=TRUE}
+# calculate the metrics for each model
+# install.packages("mltest")
+library(mltest)
+library(pROC)
+class_matrix = function(list.prob){
+  tb.metrics = c()
+  for (i in 1:length(list.prob))
+  {
+    metrics <- ml_test(apply(list.prob[[i]], 1, which.max), as.factor(Ytest), output.as.table=FALSE)
+    recall = as.vector(metrics$recall)
+    g.mean = round((recall[1]*recall[2]*recall[3])^(1/3),4)*100
+    roc = multiclass.roc(Ytest, list.prob[[i]])
+    auc = as.numeric(regmatches(roc$auc, gregexpr("[[:digit:]]+.[[:digit:]]+", roc$auc))[[1]])
+    vec.metrics = c(round(metrics$accuracy,4)*100, round(recall,4)*100, g.mean, round(auc,4)*100)
+    tb.metrics <- cbind(tb.metrics, vec.metrics)
+  }
+  
+  rownames(tb.metrics) <- c("accuracy(%)", "sensitivity_FH1(%)", "sensitivity_FH2(%)",
+                            "sensitivity_FH3(%)", "geometric mean(%)", "AUC(%)")
+  return(tb.metrics)
+}
+
+list.prob <- list(prob.linear, prob.poly, prob.rbk, y_pred_rf, y_pred_xgb_linear, y_pred_xgb_tree)
+tb.metrics <- class_matrix(list.prob)
+colnames(tb.metrics) <- c("SVM(ln)", "SVM(poly)", "SVM(rbf)", "Random Forest", "XGB(Linear)", "XGB(Tree)")
+print(tb.metrics)
+```
