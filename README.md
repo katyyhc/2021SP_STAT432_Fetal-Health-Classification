@@ -22,7 +22,7 @@ We first perform Unsupervised Learning to understand the data and explore possib
 
 ### Unsupervised Learning:
 
-<img src="https://user-images.githubusercontent.com/59358509/119888906-8c9b7880-befb-11eb-914e-906fdda76530.png" width="400" height="120">
+<p align="center"><img src="https://user-images.githubusercontent.com/59358509/119888906-8c9b7880-befb-11eb-914e-906fdda76530.png" width="400" height="120">
 
 * The highest and the lowest accuracy are both obtained using the SOM algorithm with the **x_20** and **x_reduce** dataset, respectively. 
 * Among the three algorithms, K-Means appears to have a worse performance. 
@@ -30,7 +30,7 @@ We first perform Unsupervised Learning to understand the data and explore possib
 
 ### Supervised Learning:
 
-![Eval_Classification](https://user-images.githubusercontent.com/59358509/119888723-5958e980-befb-11eb-9266-5bbc96967bbd.png)
+<p align="center"><img src="https://user-images.githubusercontent.com/59358509/119888723-5958e980-befb-11eb-9266-5bbc96967bbd.png">
 
 * Among all of the models, the tree based XGBoost model reaches the best outcome— 93.05% accuracy and 97.74% AUC.
 * Among SVM models, the one with rbf kernel outperforms the other two and reaches 91.92% accuracy and 97.37% AUC.  
