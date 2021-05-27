@@ -8,12 +8,31 @@ We first perform Unsupervised Learning to understand the data and explore possib
 
 ## Methods
 
-Unsupervised Learning:
+### Unsupervised Learning:
 * K-means
 * Hierarchical Clustering
 * Self-Organizing Map
 
-Supervised Learning:
+### Supervised Learning:
 * SVM
 * Random Forest
 * XGBoost
+
+## Evaluation
+
+### Unsupervised Learning:
+
+<img src="https://user-images.githubusercontent.com/59358509/119888906-8c9b7880-befb-11eb-914e-906fdda76530.png" width="400" height="120">
+
+* The highest and the lowest accuracy are both obtained using the SOM algorithm with the **x_20** and **x_reduce** dataset, respectively. 
+* Among the three algorithms, K-Means appears to have a worse performance. 
+* The clustering accuracy of the three algorithms are all higher when using **x_20** compared to using **x_reduce**.
+
+### Supervised Learning:
+
+![Eval_Classification](https://user-images.githubusercontent.com/59358509/119888723-5958e980-befb-11eb-9266-5bbc96967bbd.png)
+
+* Among all of the models, the tree based XGBoost model reaches the best outcome— 93.05% accuracy and 97.74% AUC.
+* Among SVM models, the one with rbf kernel outperforms the other two and reaches 91.92% accuracy and 97.37% AUC.  
+* Random Forest also achieves a satisfying performance with 90.6% accuracy and 97.28% AUC. 
+* Almost all of the models tend to perform worse in classifying observations from fetal_health status 2 correctly, indicated by a much lower sensitivity of class 2 compared to the other two classes.
