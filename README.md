@@ -6,6 +6,9 @@ The goal of this project is to perform Data Analysis and Machine Learning techni
 
 We first perform Unsupervised Learning to understand the data and explore possible clusters without data label. The algorithms we use include K-means, Hierarchical Clustering, and Self-Organizing Map. Among these three methods, Self-Organizing Map outperforms the other two methods. We also perform these clustering methods on both two preprocessed datasets, and the outcome shows that **x_20** can better identify the clusters than **x_reduce**. With this initial outcome, we use **x_20** for Supervised Learning. We apply SVM, Random Forests, and Boosting to predict the fetal health classification, and find that the tree based XGBoost model reaches the best outcome. In addition, for all the three models, classification accuracy of Class 2 is the lowest, which might because the true fetal health status of observations in “suspect” category are relatively difficult to recognize.
 
+## Data
+Kaggle: [Fetal Health Classification](https://www.kaggle.com/andrewmvd/fetal-health-classification)
+
 ## Methods
 
 ### Unsupervised Learning:
